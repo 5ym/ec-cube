@@ -1,5 +1,42 @@
-vendor
-.git
-var
+!dummy
+!.gitmodule
+composer.phar
+/vendor/
 node_modules
-bin/.phpunit
+/var/*
+!/var/.gitkeep
+!/var/.htaccess
+/app/PluginData/*
+!/app/PluginData/.gitkeep
+/app/proxy/entity/*
+!/app/proxy/entity/.gitkeep
+/html/plugin/*
+!/html/plugin/.gitkeep
+/html/upload/temp_image/*
+!/html/upload/temp_image/.gitkeep
+/html/template/*
+!/html/template/admin
+!/html/template/default
+!/html/template/install
+/tests/tmp/*
+/reports/*
+.idea
+.vscode/
+*.php~
+.env
+.maintenance
+*.neon
+
+###> symfony/phpunit-bridge ###
+.phpunit
+/phpunit.xml
+###< symfony/phpunit-bridge ###
+
+###> friendsofphp/php-cs-fixer ###
+.php_cs
+.php_cs.cache
+###< friendsofphp/php-cs-fixer ###
+
+###> symfony/web-server-bundle ###
+.web-server-pid
+###< symfony/web-server-bundle ###
