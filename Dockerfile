@@ -1,7 +1,7 @@
 FROM alpine:3.17
 
 RUN apk add --no-cache nginx php-fpm php-cli php-opcache php-phar php-iconv php-openssl php-curl php-intl php-zip php-tokenizer php-xml php-dom php-xmlwriter \
-    php-mbstring php-pdo_pgsql php-session && \
+    php-mbstring php-pdo_pgsql php-session php-simplexml && \
     wget https://raw.githubusercontent.com/composer/getcomposer.org/main/web/installer -O - -q | php -- --install-dir="/usr/local/bin/" --filename="composer" && \
     chown -R nginx:nginx /var/log/php81 && chown -R nginx:nginx /var/lib/nginx/html
 COPY default.conf /etc/nginx/http.d/
