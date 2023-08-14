@@ -6,6 +6,7 @@ RUN apk add --no-cache nginx php-fpm php-cli php-opcache php-phar php-iconv php-
     chown -R nginx:nginx /var/log/php7 && chown -R nginx:nginx /var/lib/nginx/html
 COPY default.conf /etc/nginx/http.d/
 COPY zz-custom.conf /etc/php7/php-fpm.d/
+COPY zz-custom.ini /etc/php7/conf.d/
 WORKDIR /var/lib/nginx/html
 COPY --chown=nginx:nginx . .
 RUN composer clearcache && composer install
