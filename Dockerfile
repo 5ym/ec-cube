@@ -1,4 +1,4 @@
-FROM nginx/unit:1.29.1-php8.1
+FROM unit:php
 
 RUN apt-get update && apt-get -y install libicu-dev libzip-dev libpq-dev && \
     docker-php-ext-install -j$(nproc) opcache intl zip pdo_pgsql && \
