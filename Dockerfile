@@ -1,14 +1,13 @@
-FROM alpine:3.17
+FROM nginx/unit:1.29.1-php8.1
 
-RUN apk add --no-cache nginx php-fpm php-cli php-opcache php-phar php-iconv php-openssl php-curl php-intl php-zip php-tokenizer php-xml php-dom php-xmlwriter \
-    php-mbstring php-pdo_pgsql php-session php-simplexml && \
-    wget https://raw.githubusercontent.com/composer/getcomposer.org/main/web/installer -O - -q | php -- --install-dir="/usr/local/bin/" --filename="composer" && \
-    chown -R nginx:nginx /var/log/php81 && chown -R nginx:nginx /var/lib/nginx/html
-COPY default.conf /etc/nginx/http.d/
-COPY zz-custom.conf /etc/php81/php-fpm.d/
-COPY zz-custom.ini /etc/php81/conf.d/
-WORKDIR /var/lib/nginx/html
-COPY --chown=nginx:nginx . .
-RUN composer clearcache && composer install
-EXPOSE 80
-CMD php-fpm81 && nginx -g "daemon off;"
+RUN apt-get update && apt-get -y install libicu-dev libzip-dev libpq-dev && \
+    docker-php-ext-install -j$(nproc) opcache intl zip pdo_pgsql && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+COPY zz-custom.ini /usr/local/etc/php/conf.d/
+COPY --from=composer /usr/bin/composer /usr/bin/composer
+WORKDIR /www/app
+COPY --chown=unit:unit . .
+RUN composer clearcache && composer install && rm -f .env
+COPY .unit.conf.json /docker-entrypoint.d/
+EXPOSE 8080
