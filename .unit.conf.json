@@ -6,10 +6,21 @@
     },
     "routes": [
         {
+            "match": {
+                "uri": [
+                    "*.php",
+                    "*.php/*"
+                ]
+            },
             "action": {
-                "share": "/www/app/$uri",
+                "pass": "applications/app/direct"
+            }
+        },
+        {
+            "action": {
+                "share": "/www/app$uri",
                 "fallback": {
-                    "pass": "applications/app"
+                    "pass": "applications/app/index"
                 }
             }
         }
@@ -17,8 +28,15 @@
     "applications": {
         "app": {
             "type": "php",
-            "root": "/www/app/",
-            "script": "index.php"
+            "targets": {
+                "direct": {
+                    "root": "/www/app/"
+                },
+                "index": {
+                    "root": "/www/app/",
+                    "script": "index.php"
+                }
+            }
         }
     }
 }
