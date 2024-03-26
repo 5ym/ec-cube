@@ -1,4 +1,4 @@
-FROM unit:php8.1
+FROM yuim/unit:1.27.0-php8.1
 
 RUN apt-get update && apt-get -y install libicu-dev libzip-dev libpq-dev && \
     docker-php-ext-install -j$(nproc) opcache intl zip pdo_pgsql && \
