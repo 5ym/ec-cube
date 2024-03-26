@@ -1,4 +1,4 @@
-FROM unit:php
+FROM yuim/unit:1.22.0-php7.4
 
 RUN apt-get update && apt-get -y install libicu-dev libzip-dev libpq-dev && \
     docker-php-ext-install -j$(nproc) opcache intl zip pdo_pgsql && \
@@ -11,5 +11,4 @@ WORKDIR /www/app
 COPY --chown=unit:unit . .
 RUN composer clearcache && composer install && rm -f .env
 USER root
-COPY .unit.conf.json /docker-entrypoint.d/
-EXPOSE 8080
+COPY config.json /docker-entrypoint.d/
