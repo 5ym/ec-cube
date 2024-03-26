@@ -1,11 +1,11 @@
-FROM yuim/unit:1.22.0-php7.4
+FROM yuim/unit:1.23.0-php7.4
 
 RUN apt-get update && apt-get -y install libicu-dev libzip-dev libpq-dev && \
     docker-php-ext-install -j$(nproc) opcache intl zip pdo_pgsql && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY zz-custom.ini /usr/local/etc/php/conf.d/
-COPY --from=composer /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 USER unit
 WORKDIR /www/app
 COPY --chown=unit:unit . .
