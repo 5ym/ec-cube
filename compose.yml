@@ -1,19 +1,8 @@
 volumes:
-  mailcatcher-data:
-    driver: local
   pg-database:
     driver: local
 
-  ### ignore folder volume #####
-  var:
-    driver: local
-  vendor:
-    driver: local
-  node_modules:
-    driver: local
-
 services:
-  ### ECCube4 ##################################
   ec-cube:
     ### ローカルでビルドする場合はこのblockを使い、下のimage行はコメントアウトしてください
     ## build:
@@ -26,13 +15,7 @@ services:
         condition: service_healthy
     ports:
       - 8080:80
-    volumes:
-      ### 同期対象からコストの重いフォルダを除外 #####################
-      - "var:/app/var"
-      - "vendor:/app/vendor"
-      - "node_modules:/app/node_modules"
     environment:
-      # EC-CUBE environments
       APP_ENV: "dev"
       APP_DEBUG: 1
       DATABASE_URL: "postgres://dbuser:secret@postgres/eccubedb"
@@ -55,8 +38,6 @@ services:
       # ECCUBE_GC_MAXLIFETIME: 1440
       # ECCUBE_ADMIN_USER: "admin"
       # ECCUBE_ADMIN_PASS: "password"
-
-  ### PostgreSQL ##################################
   postgres:
     image: postgres:14
     environment:
@@ -72,10 +53,8 @@ services:
       interval: 3s
       timeout: 3s
       retries: 3
-
-  ### Mailcatcher ##################################
   mailcatcher:
     image: schickling/mailcatcher
     ports:
-      - "1080:1080"
-      - "1025:1025"
+      - 1080:1080
+      - 1025:1025
