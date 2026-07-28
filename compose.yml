@@ -1,11 +1,7 @@
-version: "3"
-
-networks:
-  backend:
-    driver: bridge
-
 volumes:
   mailcatcher-data:
+    driver: local
+  pg-database:
     driver: local
 
   ### ignore folder volume #####
@@ -25,20 +21,22 @@ services:
     ##   args:
     ##     ECCUBE_VERSION: ${ECCUBE_VERSION:-latest}
     image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-5ym/ec-cube}:${TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - 8080:80
-      - 4430:443
     volumes:
       ### 同期対象からコストの重いフォルダを除外 #####################
-      - "var:/var/www/html/var"
-      - "vendor:/var/www/html/vendor"
-      - "node_modules:/var/www/html/node_modules"
+      - "var:/app/var"
+      - "vendor:/app/vendor"
+      - "node_modules:/app/node_modules"
     environment:
       # EC-CUBE environments
       APP_ENV: "dev"
       APP_DEBUG: 1
-      DATABASE_URL: "sqlite:///var/eccube.db"
-      DATABASE_SERVER_VERSION: 3
+      DATABASE_URL: "postgres://dbuser:secret@postgres/eccubedb"
+      DATABASE_SERVER_VERSION: 14
       DATABASE_CHARSET: 'utf8'
       MAILER_DSN: "smtp://mailcatcher:1025"
       ECCUBE_AUTH_MAGIC: "<change.me>"
@@ -57,8 +55,23 @@ services:
       # ECCUBE_GC_MAXLIFETIME: 1440
       # ECCUBE_ADMIN_USER: "admin"
       # ECCUBE_ADMIN_PASS: "password"
-    networks:
-      - backend
+
+  ### PostgreSQL ##################################
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: eccubedb
+    ports:
+      - 15432:5432
+    volumes:
+      - pg-database:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U dbuser
+      interval: 3s
+      timeout: 3s
+      retries: 3
 
   ### Mailcatcher ##################################
   mailcatcher:
@@ -66,5 +79,3 @@ services:
     ports:
       - "1080:1080"
       - "1025:1025"
-    networks:
-      - backend
