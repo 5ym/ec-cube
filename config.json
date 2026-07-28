@@ -1,0 +1,42 @@
+{
+    "listeners": {
+        "*:80": {
+            "pass": "routes"
+        }
+    },
+    "routes": [
+        {
+            "match": {
+                "uri": [
+                    "*.php",
+                    "*.php/*"
+                ]
+            },
+            "action": {
+                "pass": "applications/app/direct"
+            }
+        },
+        {
+            "action": {
+                "share": "/www/app$uri",
+                "fallback": {
+                    "pass": "applications/app/index"
+                }
+            }
+        }
+    ],
+    "applications": {
+        "app": {
+            "type": "php",
+            "targets": {
+                "direct": {
+                    "root": "/www/app/"
+                },
+                "index": {
+                    "root": "/www/app/",
+                    "script": "index.php"
+                }
+            }
+        }
+    }
+}
