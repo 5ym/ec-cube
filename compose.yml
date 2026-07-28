@@ -22,22 +22,10 @@ services:
       DATABASE_SERVER_VERSION: 14
       DATABASE_CHARSET: 'utf8'
       MAILER_DSN: "smtp://mailcatcher:1025"
-      ECCUBE_AUTH_MAGIC: "<change.me>"
-      # TRUSTED_HOSTS: '^127.0.0.1$$,^localhost$$'
-      # ECCUBE_LOCALE: "ja"
-      # ECCUBE_TIMEZONE: "Asia/Tokyo"
-      # ECCUBE_CURRENCY: "JPY"
-      # ECCUBE_ADMIN_ROUTE: "admin"
-      # ECCUBE_USER_DATA_ROUTE: "user_data"
-      # ECCUBE_ADMIN_ALLOW_HOSTS: []
-      # ECCUBE_FORCE_SSL: false
-      # ECCUBE_TEMPLATE_CODE: "default"
-      # ECCUBE_COOKIE_NAME: "eccube"
-      # ECCUBE_COOKIE_PATH: "/"
-      # ECCUBE_COOKIE_LIFETIME: 0
-      # ECCUBE_GC_MAXLIFETIME: 1440
-      # ECCUBE_ADMIN_USER: "admin"
-      # ECCUBE_ADMIN_PASS: "password"
+      # ローカル検証専用のダミー値(本番では必ず固有の値に変更してください)
+      ECCUBE_AUTH_MAGIC: "01701a3ce1a24bd9689bb20a2f22b7c1633f824022148627ce531457ac4c53de"
+      ECCUBE_ADMIN_USER: "admin"
+      ECCUBE_ADMIN_PASS: "password"
   postgres:
     image: postgres:14
     environment:

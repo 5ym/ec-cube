@@ -1,6 +1,6 @@
 # ec-cube (custom Docker build)
 
-[EC-CUBE](https://github.com/EC-CUBE/ec-cube) の**最新リリース**をベースに、[FrankenPHP](https://frankenphp.dev/) (PHP 8.3) 上で動く独自 Docker イメージをビルド・配布するためのリポジトリです。
+[EC-CUBE](https://github.com/EC-CUBE/ec-cube) の**最新リリース**をベースに、[FrankenPHP](https://frankenphp.dev/) (PHP 8.3, Alpine) 上で動く独自 Docker イメージをビルド・配布するためのリポジトリです。
 
 EC-CUBE 本体のソースコードはこのリポジトリには含まれません。ビルド時に [`Dockerfile`](Dockerfile) が `https://github.com/EC-CUBE/ec-cube/releases` から該当バージョンのソース一式を取得し、`composer install` を実行してイメージを作成します。
 
@@ -27,6 +27,14 @@ DB は PostgreSQL のみサポートしています。
 ```shell
 docker compose up
 ```
+
+初回のみ、DBスキーマ作成と初期データ投入が必要です。
+
+```shell
+docker compose exec ec-cube bin/console eccube:install --no-interaction
+```
+
+ログイン情報は `compose.yml` の `ECCUBE_ADMIN_USER` / `ECCUBE_ADMIN_PASS` (デフォルト `admin` / `password`) です。管理画面は `http://localhost:8080/admin/` からアクセスできます。
 
 ## 自動ビルド
 

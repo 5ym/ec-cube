@@ -1,8 +1,7 @@
-FROM dunglas/frankenphp:php8.3
+FROM dunglas/frankenphp:php8.3-alpine
 
-RUN apt-get update && apt-get -y install --no-install-recommends curl ca-certificates libicu-dev libzip-dev libpq-dev && \
-    install-php-extensions intl zip pdo_pgsql opcache && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN install-php-extensions intl zip pdo_pgsql opcache && \
+    mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY zz-custom.ini $PHP_INI_DIR/conf.d/
 COPY Caddyfile /etc/frankenphp/Caddyfile
 COPY --from=composer /usr/bin/composer /usr/bin/composer
@@ -20,4 +19,4 @@ RUN set -eux; \
     curl -fsSL "https://github.com/EC-CUBE/ec-cube/archive/refs/tags/${ECCUBE_VERSION}.tar.gz" -o /tmp/eccube.tar.gz; \
     tar xzf /tmp/eccube.tar.gz -C /app --strip-components=1; \
     rm /tmp/eccube.tar.gz
-RUN composer clearcache && composer install --no-dev --no-interaction --optimize-autoloader && rm -f .env
+RUN composer install --no-dev --no-interaction --optimize-autoloader && rm -f .env && composer clear-cache
