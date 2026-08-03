@@ -105,100 +105,38 @@ jobs:
           fi
 
   release:
-    name: Build release image
+    name: Release
     needs: check
     if: needs.check.outputs.build_release == 'true'
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ needs.check.outputs.release_version }},enable={{is_default_branch}}
-            type=ref,event=branch
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            ECCUBE_VERSION=${{ needs.check.outputs.release_version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=release
-          cache-to: type=gha,mode=max,scope=release
+    uses: ./.github/workflows/build.yml
+    with:
+      eccube_version: ${{ needs.check.outputs.release_version }}
+      cache_scope: release
+      tags: |
+        type=raw,value=latest,enable={{is_default_branch}}
+        type=raw,value=${{ needs.check.outputs.release_version }},enable={{is_default_branch}}
+        type=ref,event=branch
 
   develop:
-    name: Build develop image
+    name: Develop
     needs: check
     # develop タグはこのリポジトリのデフォルトブランチからのみ更新する
     if: >-
       needs.check.outputs.build_develop == 'true' &&
       github.ref_name == github.event.repository.default_branch
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=develop
-            type=raw,value=develop-${{ needs.check.outputs.develop_short_sha }}
-          labels: |
-            jp.ec-cube.source.branch=${{ needs.check.outputs.develop_branch }}
-            jp.ec-cube.source.revision=${{ needs.check.outputs.develop_sha }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            ECCUBE_VERSION=${{ needs.check.outputs.develop_sha }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=develop
-          cache-to: type=gha,mode=max,scope=develop
+    uses: ./.github/workflows/build.yml
+    with:
+      eccube_version: ${{ needs.check.outputs.develop_sha }}
+      cache_scope: develop
+      tags: |
+        type=raw,value=develop
+        type=raw,value=develop-${{ needs.check.outputs.develop_short_sha }}
+      labels: |
+        jp.ec-cube.source.branch=${{ needs.check.outputs.develop_branch }}
+        jp.ec-cube.source.revision=${{ needs.check.outputs.develop_sha }}

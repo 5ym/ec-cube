@@ -59,3 +59,5 @@ docker compose exec ec-cube bin/console eccube:install --no-interaction
 
 - **リリース**: [EC-CUBE の最新リリース](https://github.com/EC-CUBE/ec-cube/releases)を調べ、そのバージョンのタグが GHCR に既にあればスキップします
 - **develop**: EC-CUBE 本体のデフォルトブランチの先頭コミットを調べ、そのコミットの `develop-<短縮SHA>` が GHCR に既にあれば (= 差分なし) スキップします
+
+実際のビルドは [`.github/workflows/build.yml`](.github/workflows/build.yml) が担当します。`linux/amd64` と `linux/arm64` をそれぞれのネイティブランナー (`ubuntu-latest` / `ubuntu-24.04-arm`) でビルドし、最後にマニフェストリストへ統合します。QEMU エミュレーションを挟むと `composer install` が非常に遅く、かつ稀に SIGSEGV で落ちるためです。
