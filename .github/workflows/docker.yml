@@ -3,20 +3,111 @@ name: Update GitHub Container Registry
 on:
   push:
   schedule:
-    # 毎日 03:00 JST に EC-CUBE の最新リリースをチェックし、更新があれば再ビルドする
+    # 毎日 03:00 JST に EC-CUBE の最新リリースと開発ブランチをチェックし、更新があれば再ビルドする
     - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       eccube_version:
-        description: 'Build する EC-CUBE のリリースタグ (例: 4.2.3-p2)。空欄なら最新リリースを使用'
+        description: 'Build する EC-CUBE のリリースタグ (例: 4.3.1-p1)。空欄なら最新リリースを使用'
         required: false
+      force:
+        description: '同じ内容のイメージが既にあっても再ビルドする'
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  register:
+  check:
+    name: Check for updates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      release_version: ${{ steps.release.outputs.version }}
+      build_release: ${{ steps.release.outputs.build }}
+      develop_branch: ${{ steps.develop.outputs.branch }}
+      develop_sha: ${{ steps.develop.outputs.sha }}
+      develop_short_sha: ${{ steps.develop.outputs.short_sha }}
+      build_develop: ${{ steps.develop.outputs.build }}
+    steps:
+      # このリポジトリ自体が変わった (push) 場合と手動 force 指定時は、
+      # 中身が同じでも作り直す
+      - name: Determine force flag
+        id: force
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "force=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "force=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 既存イメージのタグ有無を調べるためにログインしておく
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 最新 "リリース" (タグ一覧ではなく https://github.com/EC-CUBE/ec-cube/releases)
+      - name: Check latest EC-CUBE release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.eccube_version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(gh api repos/EC-CUBE/ec-cube/releases/latest --jq '.tag_name')
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ steps.force.outputs.force }}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC-CUBE $VERSION を強制ビルドします"
+          elif docker buildx imagetools inspect "$REGISTRY/$IMAGE_NAME:$VERSION" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC-CUBE $VERSION のイメージは既にあるためスキップします"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::新しいリリース EC-CUBE $VERSION をビルドします"
+          fi
+
+      # EC-CUBE 本体の開発ブランチ (デフォルトブランチ) の先頭コミット
+      - name: Check EC-CUBE default branch
+        id: develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=$(gh api repos/EC-CUBE/ec-cube --jq '.default_branch')
+          SHA=$(gh api "repos/EC-CUBE/ec-cube/commits/$BRANCH" --jq '.sha')
+          SHORT_SHA="${SHA:0:7}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ steps.force.outputs.force }}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC-CUBE $BRANCH ($SHORT_SHA) を強制ビルドします"
+          elif docker buildx imagetools inspect "$REGISTRY/$IMAGE_NAME:develop-$SHORT_SHA" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC-CUBE $BRANCH に差分がないためスキップします ($SHORT_SHA)"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC-CUBE $BRANCH に差分があるため develop をビルドします ($SHORT_SHA)"
+          fi
+
+  release:
+    name: Build release image
+    needs: check
+    if: needs.check.outputs.build_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,16 +115,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Resolve EC-CUBE release version
-        id: eccube
-        run: |
-          VERSION="${{ github.event.inputs.eccube_version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/EC-CUBE/ec-cube/releases/latest | sed 's#.*/tag/##')
-          fi
-          echo "EC-CUBE version: $VERSION"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -54,7 +135,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.eccube.outputs.version }}
+            type=raw,value=${{ needs.check.outputs.release_version }},enable={{is_default_branch}}
             type=ref,event=branch
 
       - name: Build and push Docker image
@@ -64,8 +145,60 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            ECCUBE_VERSION=${{ steps.eccube.outputs.version }}
+            ECCUBE_VERSION=${{ needs.check.outputs.release_version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,mode=max,scope=release
+
+  develop:
+    name: Build develop image
+    needs: check
+    # develop タグはこのリポジトリのデフォルトブランチからのみ更新する
+    if: >-
+      needs.check.outputs.build_develop == 'true' &&
+      github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=develop
+            type=raw,value=develop-${{ needs.check.outputs.develop_short_sha }}
+          labels: |
+            jp.ec-cube.source.branch=${{ needs.check.outputs.develop_branch }}
+            jp.ec-cube.source.revision=${{ needs.check.outputs.develop_sha }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            ECCUBE_VERSION=${{ needs.check.outputs.develop_sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=develop
+          cache-to: type=gha,mode=max,scope=develop

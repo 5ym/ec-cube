@@ -10,14 +10,25 @@ EC-CUBE 本体のソースコードはこのリポジトリには含まれませ
 docker pull ghcr.io/5ym/ec-cube:latest
 ```
 
-`latest` タグは EC-CUBE の最新リリースを取り込んだイメージです。特定バージョンで固定したい場合は EC-CUBE のリリースタグ (例: `4.2.3-p2`) のタグを指定してください。
+用意しているタグは以下のとおりです。
+
+| タグ | 中身 |
+| --- | --- |
+| `latest` | EC-CUBE の最新リリース |
+| `4.3.1-p1` などのリリースタグ | 該当リリースで固定 |
+| `develop` | EC-CUBE 本体の開発ブランチ (デフォルトブランチ) の最新コミット |
+| `develop-<短縮SHA>` | 該当コミットで固定した開発版 |
+
+`develop` は未リリースの開発中コードをビルドしたものです。動作確認用途で、本番では使わないでください。
 
 ## ローカルビルド
 
 ```shell
 docker build -t ec-cube --build-arg ECCUBE_VERSION=latest .
-# 特定バージョンを指定する場合
-docker build -t ec-cube --build-arg ECCUBE_VERSION=4.2.3-p2 .
+# 特定リリースを指定する場合
+docker build -t ec-cube --build-arg ECCUBE_VERSION=4.3.1-p1 .
+# 開発ブランチの特定コミットを指定する場合 (40 桁のコミット SHA)
+docker build -t ec-cube --build-arg ECCUBE_VERSION=aafc564f97866822dcb1bd62b9641ae8fb173d18 .
 ```
 
 ## ローカル起動
@@ -40,6 +51,11 @@ docker compose exec ec-cube bin/console eccube:install --no-interaction
 
 [`.github/workflows/docker.yml`](.github/workflows/docker.yml) が以下のタイミングでイメージをビルドし `ghcr.io/5ym/ec-cube` に push します。
 
-- このリポジトリへの push 時
-- 毎日 03:00 (JST) — EC-CUBE の新しいリリースが出ていないか確認するため
-- 手動実行 (`workflow_dispatch`) — ビルドする EC-CUBE のバージョンを指定可能
+- このリポジトリへの push 時 — Dockerfile 等が変わるため常に再ビルド
+- 毎日 03:00 (JST) — 更新分だけ再ビルド
+- 手動実行 (`workflow_dispatch`) — ビルドする EC-CUBE のリリースタグを指定可能。`force` を指定すると更新がなくても再ビルド
+
+毎日のチェックでは無駄なビルドを避けるため、更新があったものだけをビルドします。
+
+- **リリース**: [EC-CUBE の最新リリース](https://github.com/EC-CUBE/ec-cube/releases)を調べ、そのバージョンのタグが GHCR に既にあればスキップします
+- **develop**: EC-CUBE 本体のデフォルトブランチの先頭コミットを調べ、そのコミットの `develop-<短縮SHA>` が GHCR に既にあれば (= 差分なし) スキップします
