@@ -1,6 +1,6 @@
 FROM dunglas/frankenphp:php8.3-alpine
 
-RUN install-php-extensions gd intl zip pdo_pgsql opcache && \
+RUN install-php-extensions gd intl zip pdo_pgsql && \
     mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY zz-custom.ini $PHP_INI_DIR/conf.d/
 COPY Caddyfile /etc/frankenphp/Caddyfile
