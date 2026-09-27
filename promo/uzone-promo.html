@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UZone Promo</title>
+<!--
+  UZone 宣伝動画（16:9 / 9:16 両対応）
+  - ?format=16x9 | 9x16
+  - 全アニメーションは renderAt(t) の純関数。CSS transition は使わない
+    → render.mjs が 1/30 秒刻みで renderAt を呼んでキャプチャする
+  - 車台番号・型式・品番などはすべて架空の値
+-->
+<style>
+:root{
+  --ink:#0E1114; --ink2:#1A1F24;
+  --steel-d:#2A3036; --steel:#56616B; --steel-l:#A9B2BA; --steel-xl:#D5DADE;
+  --paper:#F1F1EC;
+  --y:#FFD200; --y-d:#D9B200;
+  --ok:#2FB36B; --ng:#E55C5C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--ink);overflow:hidden}
+body{font-family:"Noto Sans CJK JP","Noto Sans JP",sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+#stage{position:relative;overflow:hidden;background:var(--steel-d)}
+.abs{position:absolute;left:0;top:0;will-change:transform,opacity}
+.mono{font-family:"DejaVu Sans Mono","Noto Sans Mono CJK JP",monospace;letter-spacing:.02em}
+.scene{position:absolute;inset:0;display:none}
+
+/* ---------- background ---------- */
+#bg{position:absolute;inset:-20%;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255,255,255,.10), rgba(0,0,0,.0) 55%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 2px, transparent 2px 5px),
+    linear-gradient(160deg,#3A434B,#262C31 60%,#1C2126);
+}
+#grid{position:absolute;inset:-50%;
+  background-image:
+    linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);
+  background-size:120px 120px;}
+#vign{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%)}
+.hz{background:repeating-linear-gradient(-45deg,var(--y) 0 34px,var(--ink) 34px 68px)}
+
+/* ---------- common type ---------- */
+.kicker{font-weight:700;font-size:26px;letter-spacing:.3em;color:var(--y);white-space:nowrap}
+.kicker b{display:inline-block;background:var(--y);color:var(--ink);padding:2px 12px;margin-right:14px;letter-spacing:.1em}
+.ttl{font-weight:700;line-height:1.18;white-space:nowrap;letter-spacing:.01em}
+.ttl em{font-style:normal;color:var(--y)}
+.sub{font-weight:400;color:var(--steel-xl);white-space:nowrap}
+.hl{background:linear-gradient(transparent 62%, rgba(255,210,0,.9) 62%);color:#fff}
+
+/* ---------- HUD ---------- */
+#hud-logo{font-weight:700;font-size:30px;letter-spacing:.18em}
+#hud-logo span{color:var(--y)}
+#hud-idx{font-size:22px;color:var(--steel-l)}
+#hud-bar{height:8px;background:var(--y)}
+#hud-rec{font-size:20px;color:var(--steel-l)}
+#hud-rec i{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--ng);margin-right:8px;vertical-align:1px}
+
+/* ---------- hook ---------- */
+.hookw{font-weight:700;font-size:150px;white-space:nowrap;letter-spacing:.02em;line-height:1.2}
+.strike{height:26px;background:var(--y);transform-origin:left center}
+#hook-big{font-weight:700;white-space:nowrap;text-align:center;line-height:1.1}
+
+/* ---------- phone ---------- */
+.phone{border-radius:64px;background:#0b0d0f;padding:18px;box-shadow:0 40px 80px rgba(0,0,0,.55), inset 0 0 0 3px #3d454c}
+.phone .scr{position:relative;width:100%;height:100%;border-radius:48px;overflow:hidden;background:#111}
+.phone .notch{position:absolute;left:50%;top:12px;width:30%;height:30px;border-radius:20px;background:#000;transform:translateX(-50%);z-index:5}
+.cam{position:absolute;inset:0;background:
+  radial-gradient(ellipse at 40% 35%, #5a636b, #2a3036 70%);}
+.cam-top{position:absolute;left:0;right:0;top:0;padding:64px 28px 0;font-size:22px;color:#fff;text-align:center;z-index:4}
+.cam-bot{position:absolute;left:0;right:0;bottom:0;height:18%;background:rgba(0,0,0,.55);z-index:4}
+.shutter{position:absolute;left:50%;top:50%;width:92px;height:92px;border-radius:50%;border:6px solid #fff;transform:translate(-50%,-50%)}
+.shutter::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff}
+
+/* caution plate */
+.plate{border-radius:14px;padding:22px 26px 20px;color:#20252a;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.25) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg,#dfe3e6,#b9c0c6 55%,#cfd4d8);
+  box-shadow:0 12px 30px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.6), inset 0 0 0 5px rgba(0,0,0,.08)}
+.plate .ph{font-size:15px;font-weight:700;letter-spacing:.25em;text-align:center;border-bottom:2px solid rgba(0,0,0,.35);padding-bottom:8px;margin-bottom:10px}
+.plate .row{position:relative;display:flex;justify-content:space-between;align-items:baseline;padding:5px 6px;font-size:15px}
+.plate .row .k{font-weight:700;letter-spacing:.08em;opacity:.8}
+.plate .row .v{font-size:24px;font-weight:700;letter-spacing:.08em}
+.plate .rivet{position:absolute;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#8b949b)}
+.plate .box{position:absolute;inset:-2px -4px;border:3px solid var(--y);border-radius:6px;box-shadow:0 0 18px rgba(255,210,0,.7);opacity:0}
+.guide{position:absolute;width:56px;height:56px;border:7px solid var(--y)}
+.scan{position:absolute;left:4%;right:4%;height:6px;background:var(--y);box-shadow:0 0 24px 8px rgba(255,210,0,.55)}
+.scanglow{position:absolute;left:4%;right:4%;height:140px;background:linear-gradient(0deg,rgba(255,210,0,.28),transparent)}
+
+/* data chips */
+.chip{display:flex;align-items:center;gap:22px;background:var(--ink);border-left:10px solid var(--y);padding:16px 28px 16px 22px;box-shadow:0 18px 40px rgba(0,0,0,.4);white-space:nowrap}
+.chip .k{font-size:22px;color:var(--steel-l);font-weight:700;min-width:150px}
+.chip .v{font-size:40px;font-weight:700;letter-spacing:.06em}
+.chip .v::after{content:"";display:inline-block;width:.5em}
+.okstamp{font-weight:700;color:var(--ink);background:var(--y);padding:10px 30px;font-size:44px;letter-spacing:.08em;white-space:nowrap;box-shadow:0 0 0 6px var(--ink),0 0 0 10px var(--y)}
+
+/* shaken (vehicle inspection certificate) */
+.cert{background:#f4f1e6;color:#333;border-radius:10px;padding:24px 28px;box-shadow:0 30px 60px rgba(0,0,0,.5)}
+.cert .ch{font-size:26px;font-weight:700;text-align:center;letter-spacing:.4em;margin-bottom:14px;color:#3b4a3b}
+.cert .ln{height:14px;background:#d8d4c6;margin:9px 0;border-radius:3px}
+.cert .qrs{display:flex;gap:18px;justify-content:flex-end;margin-top:18px}
+.cert .qr{background:#fff;padding:8px;position:relative}
+.cert .qr.done::after{content:"";position:absolute;inset:0;background:rgba(47,179,107,.35);border:4px solid var(--ok)}
+.reticle{position:absolute;border:0}
+.reticle i{position:absolute;width:40px;height:40px;border:7px solid var(--y)}
+.pill{display:inline-block;background:var(--ink);color:#fff;font-weight:700;border-radius:999px;padding:12px 30px;font-size:30px;white-space:nowrap;border:3px solid var(--y)}
+
+/* parts cards */
+.card{width:300px;background:var(--paper);color:var(--ink);border-radius:14px;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.45)}
+.card .img{height:170px;background:linear-gradient(160deg,#e8eaec,#c3c9ce);display:flex;align-items:center;justify-content:center;position:relative}
+.card .img svg{width:120px;height:120px}
+.card .bd{padding:14px 16px 16px}
+.card .nm{font-size:24px;font-weight:700;white-space:nowrap}
+.card .pn{font-size:17px;color:#5a646d;margin-top:2px}
+.card .tg{display:flex;gap:8px;margin-top:10px}
+.card .tg span{font-size:16px;font-weight:700;padding:3px 10px;border-radius:4px;background:#dfe3e6;white-space:nowrap}
+.card .tg span.rb{background:var(--ink);color:var(--y)}
+.badge{position:absolute;right:12px;top:12px;font-size:22px;font-weight:700;color:#fff;background:var(--ok);padding:6px 14px;border-radius:6px;white-space:nowrap;box-shadow:0 6px 14px rgba(0,0,0,.25)}
+
+/* numbers */
+.num{font-weight:700;white-space:nowrap;text-align:center;line-height:1}
+.num .n{color:var(--y);font-family:"DejaVu Sans","Noto Sans CJK JP",sans-serif;letter-spacing:-.02em}
+.num .l{display:block;color:#fff}
+.foot{font-size:18px;color:var(--steel-l);white-space:nowrap}
+
+/* inquiry form */
+.form{background:var(--paper);color:var(--ink);border-radius:18px;padding:28px 30px;box-shadow:0 30px 60px rgba(0,0,0,.5)}
+.form h4{font-size:26px;margin-bottom:16px}
+.form .f{margin-bottom:14px}
+.form .f label{display:block;font-size:17px;font-weight:700;color:#5a646d;margin-bottom:4px}
+.form .f div{font-size:24px;border:2px solid #c9ced3;border-radius:8px;padding:8px 14px;min-height:48px;background:#fff;white-space:nowrap;overflow:hidden}
+.form .f div.act{border-color:var(--y);box-shadow:0 0 0 4px rgba(255,210,0,.35)}
+.btn{display:block;text-align:center;font-weight:700;font-size:26px;background:var(--y);color:var(--ink);border-radius:10px;padding:14px;white-space:nowrap}
+.btn.dk{background:var(--ink);color:var(--y)}
+.toast{display:flex;gap:18px;align-items:center;background:#fff;color:var(--ink);border-radius:20px;padding:20px 26px;box-shadow:0 24px 50px rgba(0,0,0,.45);white-space:nowrap}
+.toast .ic{width:58px;height:58px;border-radius:14px;background:var(--y);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:30px}
+.toast .t1{font-size:18px;color:#6a747d;font-weight:700}
+.toast .t2{font-size:26px;font-weight:700}
+.ans{background:var(--paper);color:var(--ink);border-radius:18px;padding:22px 24px;box-shadow:0 30px 60px rgba(0,0,0,.5)}
+.ans .r{display:flex;align-items:center;gap:14px;padding:12px 6px;border-bottom:1px solid #d5d9dc;font-size:22px;white-space:nowrap}
+.ans .cb{width:30px;height:30px;border:3px solid #7a848c;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--ink)}
+.ans .cb.on{background:var(--y);border-color:var(--y)}
+.ans .kd{font-size:16px;font-weight:700;padding:3px 10px;border-radius:4px;background:var(--ink);color:var(--y)}
+.ans .pr{margin-left:auto;font-weight:700}
+.clock{width:230px;height:230px;border-radius:50%;background:var(--ink);border:10px solid var(--y);position:relative;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+.clock i{position:absolute;left:50%;bottom:50%;transform-origin:50% 100%;background:#fff;border-radius:4px}
+.clock b{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px;border-radius:50%;background:var(--y)}
+.tap{width:90px;height:90px;border-radius:50%;border:6px solid var(--y);background:rgba(255,210,0,.25)}
+
+/* invoice */
+.inv{width:560px;background:#fff;color:var(--ink);padding:40px 44px;box-shadow:0 40px 80px rgba(0,0,0,.55)}
+.inv .h{font-size:44px;font-weight:700;letter-spacing:.5em;text-align:center;border-bottom:4px double var(--ink);padding-bottom:12px}
+.inv .to{font-size:22px;margin:20px 0 6px;border-bottom:2px solid var(--ink);padding-bottom:4px;display:inline-block}
+.inv .tl{display:flex;justify-content:space-between;font-size:20px;padding:9px 0;border-bottom:1px solid #d7dbde}
+.inv .tot{display:flex;justify-content:space-between;font-size:28px;font-weight:700;padding:16px 0 0}
+.stamp{font-weight:700;color:var(--ng);border:8px solid var(--ng);border-radius:14px;padding:6px 22px;font-size:54px;letter-spacing:.1em;white-space:nowrap;background:rgba(255,255,255,.6)}
+.feat{background:var(--ink);border:3px solid var(--steel);color:#fff;font-weight:700;font-size:28px;padding:14px 24px;border-radius:12px;white-space:nowrap}
+.feat i{font-style:normal;color:var(--y);margin-right:10px}
+
+/* end card */
+.logo{font-weight:700;letter-spacing:.06em;line-height:1;white-space:nowrap;display:flex}
+.logo span{display:inline-block}
+.logo span.u{color:var(--y)}
+.url{background:var(--y);color:var(--ink);font-weight:700;padding:14px 40px;white-space:nowrap;font-family:"DejaVu Sans","Noto Sans CJK JP",sans-serif;letter-spacing:.04em}
+.tag{font-weight:700;white-space:nowrap;text-align:center}
+
+#wipe{position:absolute;display:none}
+#wipe .band{position:absolute;inset:0}
+#wipe .edge{position:absolute;top:0;bottom:0;width:40px;background:var(--y)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#rgb{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="grid" class="abs"></div>
+
+  <!-- ===== S1: hook ===== -->
+  <div class="scene" id="s-hook">
+    <div class="abs hookw" id="hw0">型式を調べて。</div>
+    <div class="abs hookw" id="hw1">品番を調べて。</div>
+    <div class="abs hookw" id="hw2">在庫は電話で確認。</div>
+    <div class="abs strike" id="hs0"></div>
+    <div class="abs strike" id="hs1"></div>
+    <div class="abs strike" id="hs2"></div>
+    <div class="abs" id="hook-big"></div>
+  </div>
+
+  <!-- ===== S2: caution plate ===== -->
+  <div class="scene" id="s-plate">
+    <div class="abs" id="p-title">
+      <div class="kicker"><b>01</b>CAUTION PLATE SCAN</div>
+      <div class="ttl" id="p-ttl">コーションプレートを<br><em>撮るだけ</em>で車両特定。</div>
+    </div>
+    <div class="abs phone" id="p-phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="cam"></div>
+        <div class="cam-top">コーションプレートをガイドに合わせてください</div>
+        <div class="abs plate" id="p-plate">
+          <div class="rivet" style="left:8px;top:8px"></div><div class="rivet" style="right:8px;top:8px"></div>
+          <div class="rivet" style="left:8px;bottom:8px"></div><div class="rivet" style="right:8px;bottom:8px"></div>
+          <div class="ph">VEHICLE IDENTIFICATION</div>
+          <div class="row"><span class="k">MODEL</span><span class="v mono">XYZ-UZ10</span><div class="box"></div></div>
+          <div class="row"><span class="k">FRAME No.</span><span class="v mono">UZ10-0012345</span><div class="box"></div></div>
+          <div class="row"><span class="k">ENGINE</span><span class="v mono">9ZX</span></div>
+          <div class="row"><span class="k">COLOR / TRIM</span><span class="v mono">Z9Z / QA70</span><div class="box"></div></div>
+          <div class="row"><span class="k">TM / AXLE</span><span class="v mono">U9A / Z01</span></div>
+        </div>
+        <div class="guide abs" id="g0" style="border-right:0;border-bottom:0"></div>
+        <div class="guide abs" id="g1" style="border-left:0;border-bottom:0"></div>
+        <div class="guide abs" id="g2" style="border-right:0;border-top:0"></div>
+        <div class="guide abs" id="g3" style="border-left:0;border-top:0"></div>
+        <div class="scanglow abs" id="p-glow"></div>
+        <div class="scan abs" id="p-scan"></div>
+        <div class="cam-bot"><div class="shutter"></div></div>
+        <div class="abs" id="p-flash" style="inset:0;background:#fff;opacity:0;width:100%;height:100%"></div>
+      </div>
+    </div>
+    <div class="abs chip" id="c0"><span class="k">型式</span><span class="v mono" data-v="XYZ-UZ10"></span></div>
+    <div class="abs chip" id="c1"><span class="k">車台番号</span><span class="v mono" data-v="UZ10-0012345"></span></div>
+    <div class="abs chip" id="c2"><span class="k">カラー</span><span class="v mono" data-v="Z9Z"></span></div>
+    <div class="abs okstamp" id="p-ok">✓ 車両を特定しました</div>
+  </div>
+
+  <!-- ===== S3: shaken QR ===== -->
+  <div class="scene" id="s-qr">
+    <div class="abs" id="q-title">
+      <div class="kicker"><b>02</b>QR SCAN</div>
+      <div class="ttl">車検証の<em>QRコード</em>も、<br>かざすだけ。</div>
+    </div>
+    <div class="abs cert" id="q-cert">
+      <div class="ch">自動車検査証記録事項</div>
+      <div class="ln" style="width:92%"></div><div class="ln" style="width:70%"></div>
+      <div class="ln" style="width:84%"></div><div class="ln" style="width:58%"></div>
+      <div class="ln" style="width:76%"></div>
+      <div class="qrs"><div class="qr" id="qr0"></div><div class="qr" id="qr1"></div><div class="qr" id="qr2"></div></div>
+    </div>
+    <div class="abs reticle" id="q-ret"><i style="left:0;top:0;border-right:0;border-bottom:0"></i><i style="right:0;top:0;border-left:0;border-bottom:0"></i><i style="left:0;bottom:0;border-right:0;border-top:0"></i><i style="right:0;bottom:0;border-left:0;border-top:0"></i></div>
+    <div class="abs pill" id="q-prog">QRコード 3個中 <span id="q-n">0</span>個</div>
+    <div class="abs chip" id="d0"><span class="k">型式指定番号</span><span class="v mono" data-v="99999"></span></div>
+    <div class="abs chip" id="d1"><span class="k">類別区分番号</span><span class="v mono" data-v="0042"></span></div>
+    <div class="abs chip" id="d2"><span class="k">車台番号</span><span class="v mono" data-v="UZ10-0012345"></span></div>
+  </div>
+
+  <!-- ===== S4: fitment ===== -->
+  <div class="scene" id="s-fit">
+    <div class="abs" id="f-title">
+      <div class="kicker"><b>03</b>FITMENT</div>
+      <div class="ttl">型式・車台番号から<br><em>適合</em>する部品だけ。</div>
+    </div>
+    <div class="abs" id="f-veh"><span class="pill mono">XYZ-UZ10 ／ UZ10-0012345</span></div>
+    <div id="f-cards"></div>
+    <div class="abs num" id="n0"></div>
+    <div class="abs foot" id="f-foot">※件数は各メーカーの電子部品カタログ由来のデータ（2026年9月時点・UZone調べ）</div>
+  </div>
+
+  <!-- ===== S5: inquiry ===== -->
+  <div class="scene" id="s-inq">
+    <div class="abs" id="i-title">
+      <div class="kicker"><b>04</b>PARTS INQUIRY</div>
+      <div class="ttl">見つからない部品は、<br><em>問い合わせ</em>で探す。</div>
+      <div class="sub" id="i-sub" style="font-size:30px;margin-top:18px">サイト未掲載の在庫からもお探しします</div>
+    </div>
+    <div class="abs form" id="i-form" style="width:520px">
+      <h4>部品お問い合わせ</h4>
+      <div class="f"><label>型式指定番号 / 類別区分番号</label><div class="mono" id="if0" data-v="99999 / 0042"></div></div>
+      <div class="f"><label>車台番号</label><div class="mono" id="if1" data-v="UZ10-0012345"></div></div>
+      <div class="f"><label>部品</label><div id="if2" data-v="スターターモーター"></div></div>
+      <div class="f"><label>備考</label><div id="if3" data-v="リビルト希望・納期優先"></div></div>
+      <div class="btn" id="i-btn">在庫を問い合わせる</div>
+    </div>
+    <div class="abs tap" id="i-tap"></div>
+    <div class="abs clock" id="i-clock"><i id="i-hh" style="width:12px;height:62px;margin-left:-6px"></i><i id="i-mm" style="width:8px;height:92px;margin-left:-4px"></i><b></b></div>
+    <div class="abs ttl" id="i-16" style="font-size:54px;text-align:center"><em>16時</em>までのお問い合わせは<br><span class="hl">当日中に回答</span></div>
+    <div class="abs toast" id="i-toast"><div class="ic">U</div><div><div class="t1">UZone ・ お知らせ</div><div class="t2">部品お問い合わせに回答がありました</div></div></div>
+    <div class="abs ans" id="i-ans" style="width:560px">
+      <div class="r"><div class="cb on" id="ac0">✓</div><span class="kd">リビルト</span>スターターモーター<span class="pr mono">¥ ——</span></div>
+      <div class="r"><div class="cb" id="ac1"></div><span class="kd">中古</span>スターターモーター<span class="pr mono">¥ ——</span></div>
+      <div class="r" style="border:0"><div class="cb" id="ac2"></div><span class="kd">社外新品</span>スターターモーター<span class="pr mono">¥ ——</span></div>
+      <div class="btn dk" id="i-order" style="margin-top:14px">選択した部品を注文する</div>
+    </div>
+  </div>
+
+  <!-- ===== S6: invoice / B2B ===== -->
+  <div class="scene" id="s-inv">
+    <div class="abs" id="v-title">
+      <div class="kicker"><b>05</b>FOR BUSINESS</div>
+      <div class="ttl"><em>請求書払い</em>に対応。</div>
+      <div class="sub" style="font-size:32px;margin-top:16px">1ヶ月ごとにまとめて請求 ／ 法人・個人事業主</div>
+    </div>
+    <div class="abs inv" id="v-inv">
+      <div class="h">請求書</div>
+      <div class="to">株式会社 サンプル自動車整備 御中</div>
+      <div class="tl"><span>スターターモーター（リビルト）</span><span class="mono">1</span></div>
+      <div class="tl"><span>ヘッドランプ 右（中古A）</span><span class="mono">1</span></div>
+      <div class="tl"><span>オルタネーター（リビルト）</span><span class="mono">1</span></div>
+      <div class="tl"><span>ドアミラー 左（中古B）</span><span class="mono">1</span></div>
+      <div class="tot"><span>今月のご請求</span><span class="mono">¥ ———</span></div>
+    </div>
+    <div class="abs stamp" id="v-stamp">後払い</div>
+    <div class="abs feat" id="v-f0"><i>■</i>担当者ごとの管理</div>
+    <div class="abs feat" id="v-f1"><i>■</i>納品書をPDFで</div>
+    <div class="abs feat" id="v-f2"><i>■</i>購入時に在庫をリアルタイム確認</div>
+  </div>
+
+  <!-- ===== S7: end ===== -->
+  <div class="scene" id="s-end">
+    <div class="abs hz" id="e-hz1"></div>
+    <div class="abs hz" id="e-hz2"></div>
+    <div class="abs logo" id="e-logo"><span class="u">U</span><span>Z</span><span>O</span><span>N</span><span>E</span></div>
+    <div class="abs tag" id="e-tag">中古・リビルト部品を、<span style="color:var(--y)">適合</span>で選ぶ。</div>
+    <div class="abs sub" id="e-sub">整備工場・法人のための自動車部品EC</div>
+    <div class="abs url" id="e-url">uzone.parts</div>
+    <div class="abs" id="e-mk" style="font-size:22px;color:var(--steel-l);white-space:nowrap;letter-spacing:.12em">TOYOTA · NISSAN · HONDA · MAZDA · SUBARU · MITSUBISHI · SUZUKI · DAIHATSU</div>
+  </div>
+
+  <div id="vign"></div>
+  <!-- HUD -->
+  <div class="abs" id="hud-logo">U<span>Z</span>ONE</div>
+  <div class="abs mono" id="hud-idx"></div>
+  <div class="abs mono" id="hud-rec"><i></i><span id="hud-tc"></span></div>
+  <div class="abs" id="hud-bar"></div>
+
+  <div id="wipe"><div class="band hz"></div><div class="edge" style="left:-40px"></div><div class="edge" style="right:-40px"></div></div>
+  <div id="flash"></div>
+</div>
+
+<script>
+(() => {
+const q = new URLSearchParams(location.search);
+const FMT = q.get('format') === '9x16' ? '9x16' : '16x9';
+const V = FMT === '9x16';
+const W = V ? 1080 : 1920, H = V ? 1920 : 1080;
+const CAPTURE = q.has('capture');
+const stage = document.getElementById('stage');
+stage.style.width = W + 'px'; stage.style.height = H + 'px';
+if (!CAPTURE) { // preview: fit to window
+  const fit = () => { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `scale(${s})`; stage.style.transformOrigin = '0 0'; };
+  fit(); addEventListener('resize', fit);
+}
+
+/* ---------- timeline (seconds) ---------- */
+const S = {
+  hook:  [0.0, 3.8],
+  plate: [3.8, 10.2],
+  qr:    [10.2, 14.4],
+  fit:   [14.4, 22.4],
+  inq:   [22.4, 28.8],
+  inv:   [28.8, 33.0],
+  end:   [33.0, 38.0],
+};
+const DURATION = 38.0;
+window.DURATION = DURATION;
+const CUTS = [S.plate[0], S.qr[0], S.fit[0], S.inq[0], S.inv[0], S.end[0]];
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const cl = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const P = (t, a, b) => cl((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const E = {
+  out: k => 1 - Math.pow(1 - k, 3),
+  out5: k => 1 - Math.pow(1 - k, 5),
+  expo: k => k >= 1 ? 1 : 1 - Math.pow(2, -10 * k),
+  in: k => k * k * k,
+  io: k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2,
+  back: k => { const c1 = 2.2, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); },
+  el: k => k === 0 || k === 1 ? k : Math.pow(2, -10 * k) * Math.sin((k * 10 - .75) * (2 * Math.PI / 3)) + 1,
+};
+// deterministic pseudo noise for shake
+const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const noise = (t, f) => { const x = t * f, i = Math.floor(x), fr = x - i, u = fr * fr * (3 - 2 * fr); return lerp(hash(i), hash(i + 1), u) * 2 - 1; };
+// place element: anchor = 'c' center / 'l' left-middle / 'tl'
+function put(el, x, y, o = {}) {
+  const s = o.s ?? 1, r = o.r ?? 0, a = o.a ?? 'c', sx = o.sx ?? 1, sy = o.sy ?? 1;
+  const tr = a === 'c' ? 'translate(-50%,-50%)' : a === 'l' ? 'translate(0,-50%)' : a === 'r' ? 'translate(-100%,-50%)' : '';
+  el.style.transform = `translate(${x}px,${y}px) ${tr} rotate(${r}deg) scale(${s * sx},${s * sy})`;
+  el.style.opacity = o.o ?? 1;
+  el.style.filter = o.blur ? `blur(${o.blur}px)` : '';
+}
+const hide = el => { el.style.opacity = 0; };
+const type = (el, k) => { const v = el.dataset.v; el.textContent = v.slice(0, Math.round(v.length * cl(k))); };
+// punch-in: returns {s, o} for a "slam" entrance starting at t0
+const slam = (t, t0, d = .35, from = 1.8) => { const k = P(t, t0, t0 + d); return { s: lerp(from, 1, E.out5(k)), o: k > 0 ? cl(k * 4) : 0, blur: (1 - E.out(k)) * 14 * (k > 0 ? 1 : 0) }; };
+const pop = (t, t0, d = .4) => { const k = P(t, t0, t0 + d); return { s: E.back(k), o: k > 0 ? cl(k * 3) : 0 }; };
+
+/* ---------- build dynamic content ---------- */
+// fake QR (seeded) — decorative only, encodes nothing
+function qrSvg(seed, n = 25, px = 5) {
+  let r = seed; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  let out = `<svg width="${n * px}" height="${n * px}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><rect width="${n}" height="${n}" fill="#fff"/>`;
+  const finder = (x, y) => `<rect x="${x}" y="${y}" width="7" height="7" fill="#111"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3" fill="#111"/>`;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const inF = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+    if (!inF && rnd() > .52) out += `<rect x="${x}" y="${y}" width="1" height="1" fill="#111"/>`;
+  }
+  return out + finder(0, 0) + finder(n - 7, 0) + finder(0, n - 7) + '</svg>';
+}
+[['qr0', 11], ['qr1', 97], ['qr2', 4242]].forEach(([id, s]) => $(id).innerHTML = qrSvg(s, 25, V ? 5 : 5));
+
+// part cards (fictional part numbers)
+const ICON = {
+  alt: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#2A3036" stroke-width="8"/><circle cx="50" cy="50" r="10" fill="#2A3036"/><g stroke="#2A3036" stroke-width="6">' + Array.from({length: 8}, (_, i) => { const a = i * Math.PI / 4; return `<line x1="${50 + 16 * Math.cos(a)}" y1="${50 + 16 * Math.sin(a)}" x2="${50 + 30 * Math.cos(a)}" y2="${50 + 30 * Math.sin(a)}"/>`; }).join('') + '</g></svg>',
+  str: '<svg viewBox="0 0 100 100"><rect x="14" y="34" width="52" height="32" rx="6" fill="#2A3036"/><rect x="66" y="42" width="22" height="16" fill="#56616B"/><rect x="24" y="22" width="30" height="14" rx="4" fill="#56616B"/></svg>',
+  hl: '<svg viewBox="0 0 100 100"><path d="M12 70 Q14 30 60 28 L88 34 L86 72 Z" fill="#2A3036"/><circle cx="48" cy="52" r="13" fill="#FFD200"/><circle cx="72" cy="52" r="8" fill="#D5DADE"/></svg>',
+  mir: '<svg viewBox="0 0 100 100"><path d="M18 30 Q50 16 82 30 L78 70 Q50 80 22 70 Z" fill="#2A3036"/><path d="M26 36 Q50 26 74 36 L71 64 Q50 71 29 64 Z" fill="#A9B2BA"/></svg>',
+  rad: '<svg viewBox="0 0 100 100"><rect x="14" y="20" width="72" height="60" fill="#2A3036"/><g stroke="#A9B2BA" stroke-width="3">' + Array.from({length: 8}, (_, i) => `<line x1="${22 + i * 8}" y1="26" x2="${22 + i * 8}" y2="74"/>`).join('') + '</g></svg>',
+  ecu: '<svg viewBox="0 0 100 100"><rect x="22" y="22" width="56" height="56" rx="6" fill="#2A3036"/><rect x="36" y="36" width="28" height="28" fill="#FFD200"/><g stroke="#2A3036" stroke-width="5">' + [30, 42, 54, 66].map(v => `<line x1="${v}" y1="10" x2="${v}" y2="22"/><line x1="${v}" y1="78" x2="${v}" y2="90"/>`).join('') + '</g></svg>',
+};
+const CARDS = [
+  ['alt', 'オルタネーター', '27060-UZ010', 'リビルト', '適合'],
+  ['str', 'スターターモーター', '28100-UZ020', 'リビルト', '適合'],
+  ['hl', 'ヘッドランプ 右', '81110-UZ030', '中古 A', '適合'],
+  ['mir', 'ドアミラー 左', '87940-UZ040', '中古 B', '適合'],
+  ['rad', 'ラジエーター', '16400-UZ050', '社外新品', '適合'],
+  ['ecu', 'エンジンECU', '89661-UZ060', '中古 A', '適合'],
+];
+$('f-cards').innerHTML = CARDS.map((c, i) => `<div class="abs card" id="k${i}"><div class="img">${ICON[c[0]]}<div class="badge" id="kb${i}">${c[4]}</div></div><div class="bd"><div class="nm">${c[1]}</div><div class="pn mono">${c[2]}</div><div class="tg"><span class="${c[3] === 'リビルト' ? 'rb' : ''}">${c[3]}</span><span>保証付</span></div></div></div>`).join('');
+
+// numbers sequence
+const NUMS = [
+  { t: 0, val: 8, fmt: v => Math.round(v), unit: 'メーカー', lab: '国内主要メーカーに対応' },
+  { t: 1, val: 64, fmt: v => '約' + Math.round(v), unit: '万点', lab: '純正品番をデータベース化' },
+  { t: 2, val: 4300, fmt: v => Math.round(v).toLocaleString('ja-JP'), unit: '万件超', lab: '適合データ' },
+  { t: 3, val: 1.3, fmt: v => '約' + v.toFixed(1), unit: '億件', lab: '車台番号ごとの仕様データ' },
+];
+
+/* ---------- layout (per format) ---------- */
+const L = V ? {
+  ttlX: W / 2, ttlY: 250, ttlA: 'c', ttlSize: 76, ttlAlign: 'center',
+  phone: { x: W / 2, y: 1000, w: 600, h: 1060 }, plateW: 520,
+  chips: [{ x: W / 2, y: 1590 }, { x: W / 2, y: 1705 }, { x: W / 2, y: 1820 }], chipA: 'c',
+  ok: { x: W / 2, y: 1000 },
+  cert: { x: W / 2, y: 900, w: 820 }, prog: { x: W / 2, y: 1330 },
+  cardCols: 2, cardX0: W / 2 - 170, cardDX: 340, cardY0: 700, cardDY: 390, cardS: 1.0,
+  veh: { x: W / 2, y: 470 },
+  numY: H / 2, numSize: 300,
+  form: { x: W / 2, y: 1060 }, clock: { x: W / 2, y: 820 }, t16: { x: W / 2, y: 1000 },
+  toast: { x: W / 2, y: 620 }, ans: { x: W / 2, y: 1150 },
+  inv: { x: W / 2, y: 1080 }, stamp: { x: W / 2 + 230, y: 1360 },
+  feats: [{ x: W / 2, y: 1620 }, { x: W / 2, y: 1720 }, { x: W / 2, y: 1820 }],
+  logoSize: 250, logoY: 760, tagY: 1000, tagSize: 54, subY: 1110, urlY: 1330, mkY: 1760,
+} : {
+  ttlX: 1010, ttlY: 250, ttlA: 'l', ttlSize: 84, ttlAlign: 'left',
+  phone: { x: 520, y: 560, w: 500, h: 960 }, plateW: 430,
+  chips: [{ x: 1010, y: 520 }, { x: 1010, y: 640 }, { x: 1010, y: 760 }], chipA: 'l',
+  ok: { x: 520, y: 560 },
+  cert: { x: 520, y: 580, w: 760 }, prog: { x: 520, y: 950 },
+  cardCols: 3, cardX0: 1200, cardDX: 330, cardY0: 450, cardDY: 380, cardS: .86,
+  veh: { x: 400, y: 620 },
+  numY: H / 2 - 20, numSize: 330,
+  form: { x: 460, y: 600 }, clock: { x: 640, y: 700 }, t16: { x: 1240, y: 700 },
+  toast: { x: 1380, y: 560 }, ans: { x: 480, y: 620 },
+  inv: { x: 560, y: 560 }, stamp: { x: 760, y: 820 },
+  feats: [{ x: 1010, y: 560 }, { x: 1010, y: 670 }, { x: 1010, y: 780 }],
+  logoSize: 260, logoY: 430, tagY: 640, tagSize: 70, subY: 740, urlY: 870, mkY: 975,
+};
+// titles
+['p-title', 'q-title', 'f-title', 'i-title', 'v-title'].forEach(id => {
+  const el = $(id); el.style.textAlign = L.ttlAlign;
+  el.querySelectorAll('.ttl').forEach(x => x.style.fontSize = L.ttlSize + 'px');
+});
+$('p-phone').style.width = L.phone.w + 'px'; $('p-phone').style.height = L.phone.h + 'px';
+$('p-plate').style.width = L.plateW + 'px';
+$('q-cert').style.width = L.cert.w + 'px';
+$('e-logo').style.fontSize = L.logoSize + 'px';
+$('e-tag').style.fontSize = L.tagSize + 'px';
+$('e-sub').style.fontSize = (V ? 38 : 40) + 'px';
+$('e-url').style.fontSize = (V ? 64 : 60) + 'px';
+if (V) { $('e-mk').style.fontSize = '20px'; $('e-mk').innerHTML = 'TOYOTA · NISSAN · HONDA · MAZDA<br>SUBARU · MITSUBISHI · SUZUKI · DAIHATSU'; $('e-mk').style.textAlign = 'center'; $('e-mk').style.lineHeight = '1.8'; }
+$('hook-big').style.fontSize = (V ? 150 : 190) + 'px';
+if (V) document.querySelectorAll('.hookw').forEach(e => e.style.fontSize = '92px');
+if (V) { $('i-16').style.fontSize = '58px'; $('f-foot').style.fontSize = '16px'; }
+
+// title entrance/exit shared
+function title(id, t, a, b) {
+  const el = $(id), k = P(t, a, a + .5), kx = P(t, b - .3, b);
+  const dx = (1 - E.expo(k)) * (V ? 0 : 160) - E.in(kx) * 80;
+  const dy = (1 - E.expo(k)) * (V ? 80 : 0);
+  put(el, L.ttlX + dx, L.ttlY + dy, { a: L.ttlA, o: cl(k * 2) * (1 - kx) });
+  // kicker/ttl stagger via children
+  const kids = el.children;
+  for (let i = 0; i < kids.length; i++) {
+    const kk = E.expo(P(t, a + .08 * i, a + .08 * i + .45));
+    kids[i].style.transform = `translateY(${(1 - kk) * 40}px)`; kids[i].style.opacity = kk;
+  }
+}
+
+/* ---------- scenes ---------- */
+let shake = 0; // accumulated per frame
+const addShake = (t, t0, amp = 18, d = .28) => { const k = P(t, t0, t0 + d); if (k > 0 && k < 1) shake += amp * (1 - k) * (1 - k); };
+
+function sHook(t) {
+  const words = ['hw0', 'hw1', 'hw2'];
+  const T0 = [0.10, 0.85, 1.60];
+  const cy = V ? [H / 2 - 260, H / 2 - 20, H / 2 + 220] : [H / 2 - 230, H / 2 - 10, H / 2 + 210];
+  words.forEach((id, i) => {
+    const el = $(id), sl = slam(t, T0[i], .3, 2.2);
+    const out = P(t, 2.35, 2.55);
+    const w = el.offsetWidth;
+    put(el, W / 2 + (V ? 0 : (i - 1) * 60), cy[i], { s: sl.s * (1 - out * .3), o: sl.o * (1 - out) * (t > T0[i] + .5 ? .45 : 1), blur: sl.blur + out * 20, r: (i - 1) * -1.2 });
+    addShake(t, T0[i], 22);
+    // yellow strike-through
+    const st = $('hs' + i), ks = E.expo(P(t, T0[i] + .38, T0[i] + .62));
+    st.style.width = w * 1.04 + 'px';
+    const x0 = W / 2 + (V ? 0 : (i - 1) * 60) - w * .52;
+    st.style.transform = `translate(${x0}px,${cy[i] - 8}px) rotate(${-2 + i * 1.5}deg) scaleX(${ks})`;
+    st.style.opacity = (ks > 0 ? 1 : 0) * (1 - out);
+  });
+  const big = $('hook-big');
+  big.innerHTML = V ? 'もう、<br><span style="color:var(--y)">撮るだけ。</span>' : 'もう、<span style="color:var(--y)">撮るだけ。</span>';
+  const sb = slam(t, 2.55, .32, 3.0);
+  const zoom = 1 + P(t, 2.9, 3.8) * .08;
+  put(big, W / 2 + noise(t, 30) * 3, H / 2, { s: sb.s * zoom, o: sb.o, blur: sb.blur });
+  addShake(t, 2.55, 34, .4);
+}
+
+function sPlate(t) {
+  const lt = t - S.plate[0], D = S.plate[1] - S.plate[0];
+  title('p-title', lt, .15, D);
+  const ph = $('p-phone');
+  const kin = E.expo(P(lt, 0, .7));
+  const kout = E.in(P(lt, D - .35, D));
+  const drift = lerp(0, 1, P(lt, 0, D));
+  put(ph, L.phone.x + (1 - kin) * (V ? 0 : -300) - kout * 120, L.phone.y + (1 - kin) * (V ? 500 : 0), { s: lerp(1.25, 1, kin) * (1 + drift * .03), r: lerp(-10, -2, kin) + noise(lt, 1.2) * .6, o: cl(kin * 3) * (1 - kout) });
+  // plate in camera: handheld jitter, then locks
+  const lock = E.out(P(lt, 1.0, 1.6));
+  const jit = 1 - lock;
+  const pw = L.plateW, pcx = L.phone.w / 2 - 18, pcy = L.phone.h * .44;
+  put($('p-plate'), pcx + noise(lt, 2) * 40 * jit + (1 - kin) * 60, pcy + noise(lt + 9, 1.7) * 50 * jit, { s: lerp(.82, 1, lock) + noise(lt + 3, 1.3) * .05 * jit, r: noise(lt + 5, 1.1) * 9 * jit + lerp(-6, 0, lock) });
+  // guides
+  const gk = E.back(P(lt, .9, 1.35)), ph2 = $('p-plate').offsetHeight;
+  const gx = pw / 2 + 26 + (1 - gk) * 80, gy = ph2 / 2 + 26 + (1 - gk) * 80;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy], i) => put($('g' + i), pcx + sx * gx - (sx < 0 ? 0 : 0), pcy + sy * gy, { o: cl(gk * 2) * (1 - P(lt, 3.6, 3.9)) }));
+  // scanline x2
+  const sk = P(lt, 1.5, 3.1);
+  const sweep = sk < .5 ? E.io(sk * 2) : 1 - E.io((sk - .5) * 2);
+  const sy0 = pcy - ph2 / 2 - 30, sy1 = pcy + ph2 / 2 + 30;
+  const sy = lerp(sy0, sy1, sweep);
+  const sOn = sk > 0 && sk < 1 ? 1 : 0;
+  put($('p-scan'), 0, sy, { a: 'tl', o: sOn });
+  put($('p-glow'), 0, sy - (sk < .5 ? 140 : 0), { a: 'tl', o: sOn * .9, sy: sk < .5 ? 1 : -1 });
+  // row boxes flash as recognized
+  const boxes = $('p-plate').querySelectorAll('.box');
+  boxes.forEach((b, i) => { const k = P(lt, 1.9 + i * .32, 2.1 + i * .32); b.style.opacity = k * (1 - P(lt, 4.2, 4.5)); });
+  // shutter flash
+  $('p-flash').style.opacity = (1 - P(lt, 3.3, 3.6)) * (lt > 3.3 ? .9 : 0);
+  if (lt > 3.3) addShake(t, S.plate[0] + 3.3, 14);
+  // chips fly out
+  [0, 1, 2].forEach(i => {
+    const c = $('c' + i), t0 = 2.1 + i * .32;
+    const k = E.expo(P(lt, t0, t0 + .55));
+    const p0 = L.chips[i];
+    const fromX = V ? p0.x : L.phone.x, fromY = V ? L.phone.y : L.phone.y - 100;
+    const x = lerp(fromX, p0.x, k), y = lerp(fromY, p0.y, k);
+    const ko = E.in(P(lt, D - .5 + i * .05, D - .15 + i * .05));
+    put(c, x + ko * (V ? 0 : 300), y, { a: L.chipA, s: lerp(.4, 1, k), o: cl(k * 3) * (1 - ko), r: (1 - k) * -8 });
+    type(c.querySelector('.v'), P(lt, t0 + .15, t0 + .7));
+  });
+  // OK stamp
+  const ok = slam(lt, 3.55, .28, 2.4);
+  put($('p-ok'), L.ok.x, L.ok.y + (V ? 0 : 0), { s: ok.s, o: ok.o * (1 - P(lt, D - .5, D - .3)), r: -4, blur: ok.blur });
+  if (lt > 3.55) addShake(t, S.plate[0] + 3.55, 20);
+}
+
+function sQr(t) {
+  const lt = t - S.qr[0], D = S.qr[1] - S.qr[0];
+  title('q-title', lt, .1, D);
+  const cert = $('q-cert');
+  const k = E.expo(P(lt, 0, .6)), ko = E.in(P(lt, D - .3, D));
+  put(cert, L.cert.x + (1 - k) * (V ? 0 : -500), L.cert.y + (1 - k) * (V ? 600 : 0) - ko * 60, { r: lerp(12, -3, k), s: 1 + P(lt, 0, D) * .04, o: cl(k * 3) * (1 - ko) });
+  // reticle hops over qrs
+  const qrs = ['qr0', 'qr1', 'qr2'].map($);
+  const cr = cert.getBoundingClientRect(), sr = stage.getBoundingClientRect(), sc = sr.width / W;
+  const pos = qrs.map(e => { const r = e.getBoundingClientRect(); return { x: (r.left + r.width / 2 - sr.left) / sc, y: (r.top + r.height / 2 - sr.top) / sc, w: r.width / sc }; });
+  const hops = [.7, 1.35, 2.0];
+  let idx = 0; for (let i = 0; i < 3; i++) if (lt > hops[i]) idx = i;
+  const hk = E.expo(P(lt, hops[idx], hops[idx] + .3));
+  const prev = pos[Math.max(0, idx - 1)], cur = pos[idx];
+  const rx = idx === 0 ? cur.x : lerp(prev.x, cur.x, hk), ry = idx === 0 ? cur.y : lerp(prev.y, cur.y, hk);
+  const ret = $('q-ret'), rs = (cur.w + 50);
+  ret.style.width = ret.style.height = rs + 'px';
+  put(ret, rx, ry, { s: 1 + (1 - E.back(P(lt, hops[idx], hops[idx] + .35))) * .6, o: cl(P(lt, .6, .8) * 3) * (1 - P(lt, 2.6, 2.8)) });
+  let n = 0;
+  qrs.forEach((e, i) => { const done = lt > hops[i] + .38; e.classList.toggle('done', done); if (done) n++; });
+  $('q-n').textContent = n;
+  const pk = pop(lt, .55);
+  put($('q-prog'), L.prog.x, L.prog.y, { s: pk.s * (1 + (n === 3 ? (1 - P(lt, 2.4, 2.7)) * .15 : 0)), o: pk.o * (1 - ko) });
+  if (n === 3) $('q-prog').style.borderColor = 'var(--ok)'; else $('q-prog').style.borderColor = 'var(--y)';
+  [0, 1, 2].forEach(i => { if (lt > hops[i] + .38 && lt < hops[i] + .5) addShake(t, S.qr[0] + hops[i] + .38, 10, .2); });
+  // chips: 16:9 right column, 9:16 bottom
+  [0, 1, 2].forEach(i => {
+    const c = $('d' + i), t0 = 2.35 + i * .18;
+    const kk = E.expo(P(lt, t0, t0 + .5));
+    const p0 = L.chips[i];
+    const ko2 = E.in(P(lt, D - .35, D));
+    put(c, p0.x + (1 - kk) * (V ? 0 : 200), p0.y + (1 - kk) * (V ? 120 : 0) - ko2 * 40, { a: L.chipA, o: cl(kk * 3) * (1 - ko2) });
+    type(c.querySelector('.v'), P(lt, t0 + .1, t0 + .55));
+  });
+}
+
+function sFit(t) {
+  const lt = t - S.fit[0], D = S.fit[1] - S.fit[0];
+  const CARD_END = 4.0; // then numbers
+  title('f-title', lt, .05, CARD_END);
+  const vk = pop(lt, .25);
+  put($('f-veh'), V ? L.veh.x : L.ttlX, V ? L.veh.y : L.ttlY + 200, { a: V ? 'c' : 'l', s: vk.s, o: vk.o * (1 - P(lt, CARD_END - .3, CARD_END)) });
+  CARDS.forEach((c, i) => {
+    const el = $('k' + i);
+    const col = i % L.cardCols, row = Math.floor(i / L.cardCols);
+    let x, y;
+    if (V) { x = L.cardX0 + col * L.cardDX; y = L.cardY0 + row * L.cardDY + 180; }
+    else { x = L.cardX0 + (col - 1) * L.cardDX - 380 + 200; y = L.cardY0 + row * L.cardDY + 150; }
+    if (!V) { x = 230 + col * 300; y = 330 + row * 370; }
+    const t0 = .3 + i * .12;
+    const k = E.expo(P(lt, t0, t0 + .5));
+    const ko = E.in(P(lt, CARD_END - .35 + i * .03, CARD_END + i * .03));
+    const flip = Math.cos(Math.PI * (1 - E.out(P(lt, t0, t0 + .45)))) ;
+    put(el, x + (1 - k) * (V ? (col ? 300 : -300) : -200), y + (1 - k) * 200 + ko * 900, { s: L.cardS * (1 + (1 - k) * .3), sx: Math.max(.02, (flip + 1) / 2), o: cl(k * 3), r: (1 - k) * (i % 2 ? 10 : -10) + ko * (i % 2 ? 25 : -25) });
+    // badge stamp on the beat
+    const bt = 1.5 + i * .22;
+    const b = slam(lt, bt, .22, 2.6);
+    put($('kb' + i), 0, 0, { a: 'tl', s: b.s, o: b.o, r: -6 });
+    $('kb' + i).style.transform += '';
+    if (lt > bt && lt < bt + .1) addShake(t, S.fit[0] + bt, 8, .15);
+  });
+  // numbers
+  const n0 = $('n0');
+  const NT = CARD_END + .1, step = (D - NT - .1) / NUMS.length;
+  const ni = Math.floor((lt - NT) / step);
+  if (lt >= NT && ni >= 0 && ni < NUMS.length) {
+    const d = NUMS[ni], nl = lt - NT - ni * step;
+    const cnt = E.out(P(nl, 0, step * .6));
+    const sl = slam(nl, 0, .25, 2.0);
+    const ko = P(nl, step - .12, step);
+    const sz = L.numSize * (d.val >= 1000 ? (V ? .62 : .8) : 1);
+    n0.innerHTML = `<span class="l" style="font-size:${V ? 46 : 52}px;margin-bottom:${V ? 20 : 26}px">${d.lab}</span><span class="n" style="font-size:${sz}px">${d.fmt(d.val * cnt)}</span><span style="font-size:${V ? 90 : 110}px">${d.unit}</span>`;
+    put(n0, W / 2 + noise(lt, 25) * 2, L.numY, { s: sl.s * (1 + nl * .05) * (1 + ko * .6), o: sl.o * (1 - ko), blur: sl.blur + ko * 18 });
+    addShake(t, S.fit[0] + NT + ni * step, 26, .3);
+    put($('f-foot'), W / 2, H - (V ? 140 : 70), { o: .9 });
+  } else { hide(n0); hide($('f-foot')); }
+}
+
+function sInq(t) {
+  const lt = t - S.inq[0], D = S.inq[1] - S.inq[0];
+  // phase A: form (0-2.4) | phase B: 16時 (2.4-3.9) | phase C: answer (3.9-D)
+  const A1 = 2.5, B1 = 4.0;
+  title('i-title', lt, .05, A1);
+  // form
+  const fk = E.expo(P(lt, .1, .6));
+  const fly = E.in(P(lt, 2.05, 2.45));
+  put($('i-form'), L.form.x + fly * (V ? 0 : 1400) + (1 - fk) * (V ? 0 : -300), L.form.y + (1 - fk) * (V ? 400 : 0) - fly * (V ? 1600 : 400), { s: 1 - fly * .5, r: fly * 18 + (1 - fk) * -6, o: cl(fk * 3) * (1 - fly) });
+  ['if0', 'if1', 'if2', 'if3'].forEach((id, i) => { const t0 = .45 + i * .3; type($(id), P(lt, t0, t0 + .28)); $(id).classList.toggle('act', lt > t0 && lt < t0 + .3); });
+  // tap on button
+  const btn = $('i-btn'), br = btn.getBoundingClientRect(), sr = stage.getBoundingClientRect(), sc = sr.width / W;
+  const tk = P(lt, 1.7, 2.0);
+  btn.style.transform = `scale(${1 - Math.sin(tk * Math.PI) * .06})`;
+  put($('i-tap'), (br.left + br.width * .7 - sr.left) / sc, (br.top + br.height / 2 - sr.top) / sc, { s: .5 + tk * 1.2, o: Math.sin(tk * Math.PI) });
+  // 16時 block
+  const ck = pop(lt, A1 - .1, .45), cko = E.in(P(lt, B1 - .25, B1));
+  put($('i-clock'), L.clock.x, L.clock.y, { s: ck.s * (1 - cko), o: ck.o, r: ck.s * 0 });
+  const tt = P(lt, A1, B1 - .3); // hands sweep to 16:00
+  const mm = lerp(-720, 0, E.io(tt)), hh = lerp(60, 120, E.io(tt));
+  $('i-hh').style.transform = `rotate(${hh}deg)`; $('i-mm').style.transform = `rotate(${mm}deg)`;
+  const t16 = slam(lt, A1 + .15, .3, 1.9);
+  put($('i-16'), L.t16.x, L.t16.y + (V ? 180 : 0), { a: V ? 'c' : 'c', s: t16.s, o: t16.o * (1 - cko), blur: t16.blur });
+  if (lt > A1 + .15) addShake(t, S.inq[0] + A1 + .15, 18);
+  // answer
+  const tk2 = E.back(P(lt, B1, B1 + .45));
+  put($('i-toast'), L.toast.x, L.toast.y - (1 - tk2) * 260, { o: cl(P(lt, B1, B1 + .2) * 3) * (1 - E.in(P(lt, D - .3, D))), s: V ? .95 : 1 });
+  const ak = E.expo(P(lt, B1 + .35, B1 + .85));
+  put($('i-ans'), L.ans.x + (1 - ak) * (V ? 0 : -300), L.ans.y + (1 - ak) * (V ? 300 : 0) + (V ? 60 : 60), { s: V ? 1.35 : 1.3, o: cl(ak * 3) * (1 - E.in(P(lt, D - .3, D))) });
+  const ot = P(lt, B1 + 1.4, B1 + 1.7);
+  $('i-order').style.transform = `scale(${1 - Math.sin(ot * Math.PI) * .07})`;
+  $('i-order').style.background = ot > .5 ? 'var(--y)' : 'var(--ink)';
+  $('i-order').style.color = ot > .5 ? 'var(--ink)' : 'var(--y)';
+  $('i-order').textContent = lt > B1 + 1.75 ? '✓ 注文しました' : '選択した部品を注文する';
+  if (lt > B1 + 1.55) addShake(t, S.inq[0] + B1 + 1.55, 10, .2);
+  // title B for phase C on 16:9
+  if (lt > B1) {
+    const el = $('i-title'); const k = E.expo(P(lt, B1 + .1, B1 + .6)); const kx = P(lt, D - .3, D);
+    el.children[1].innerHTML = '回答から、<br><em>そのまま注文</em>。';
+    $('i-sub').textContent = '見積印刷にも対応';
+    put(el, L.ttlX + (V ? 0 : (1 - k) * 160), (V ? L.ttlY : L.ttlY + 60) + (V ? (1 - k) * 80 : 0), { a: L.ttlA, o: k * (1 - kx) });
+    if (V) { hide($('i-toast')); put($('i-toast'), L.toast.x, L.toast.y + 20 - (1 - tk2) * 200, { o: cl(P(lt, B1, B1 + .2) * 3) * (1 - E.in(P(lt, D - .3, D))), s: .95 }); }
+    if (!V) put($('i-toast'), 1380, 780 - (1 - tk2) * 260, { o: cl(P(lt, B1, B1 + .2) * 3) * (1 - E.in(P(lt, D - .3, D))) });
+  } else {
+    $('i-title').children[1].innerHTML = '見つからない部品は、<br><em>問い合わせ</em>で探す。';
+    $('i-sub').textContent = 'サイト未掲載の在庫からもお探しします';
+  }
+}
+
+function sInv(t) {
+  const lt = t - S.inv[0], D = S.inv[1] - S.inv[0];
+  title('v-title', lt, .05, D);
+  const k = E.expo(P(lt, 0, .55)), ko = E.in(P(lt, D - .3, D));
+  put($('v-inv'), L.inv.x, L.inv.y - (1 - k) * 900 + ko * 200, { r: lerp(-14, 2, k) + noise(lt, .8) * .8, s: V ? 1.25 : 1, o: cl(k * 3) * (1 - ko) });
+  if (lt > .45) addShake(t, S.inv[0] + .45, 14);
+  const lines = $('v-inv').querySelectorAll('.tl');
+  lines.forEach((l, i) => { const kk = E.expo(P(lt, .4 + i * .1, .7 + i * .1)); l.style.transform = `translateX(${(1 - kk) * 60}px)`; l.style.opacity = kk; });
+  const st = slam(lt, 1.2, .22, 3.0);
+  put($('v-stamp'), L.stamp.x, L.stamp.y, { s: st.s, o: st.o * (1 - ko), r: -14, blur: st.blur });
+  if (lt > 1.2) addShake(t, S.inv[0] + 1.2, 30, .35);
+  [0, 1, 2].forEach(i => {
+    const p0 = L.feats[i], t0 = 1.8 + i * .22;
+    const kk = pop(lt, t0, .4);
+    put($('v-f' + i), p0.x + (V ? 0 : 0), p0.y + (V ? 0 : 60), { a: V ? 'c' : 'l', s: kk.s, o: kk.o * (1 - ko) });
+  });
+}
+
+function sEnd(t) {
+  const lt = t - S.end[0];
+  // hazard bars slide
+  const hk = E.expo(P(lt, 0, .5));
+  const hz1 = $('e-hz1'), hz2 = $('e-hz2');
+  hz1.style.width = hz2.style.width = W * 1.6 + 'px'; hz1.style.height = hz2.style.height = '48px';
+  put(hz1, W / 2 - (1 - hk) * W * 1.6 + lt * 40, V ? 560 : 170, { r: -4 });
+  put(hz2, W / 2 + (1 - hk) * W * 1.6 - lt * 40, V ? 1560 : 1068, { r: -4 });
+  // logo letters assemble
+  const letters = $('e-logo').children;
+  const dirs = [[-1, 0], [0, -1], [0, 1], [0, -1], [1, 0]];
+  for (let i = 0; i < letters.length; i++) {
+    const kk = E.expo(P(lt, .1 + i * .07, .6 + i * .07));
+    letters[i].style.transform = `translate(${dirs[i][0] * (1 - kk) * 500}px,${dirs[i][1] * (1 - kk) * 500}px) rotate(${(1 - kk) * 40 * (i % 2 ? 1 : -1)}deg)`;
+    letters[i].style.opacity = cl(kk * 3);
+  }
+  const breathe = 1 + P(lt, .8, 5) * .05;
+  put($('e-logo'), W / 2, L.logoY, { s: breathe });
+  if (lt > .55) addShake(t, S.end[0] + .55, 22, .35);
+  const tk = E.expo(P(lt, .9, 1.4));
+  put($('e-tag'), W / 2, L.logoY + (L.tagY - L.logoY) + (1 - tk) * 60, { o: tk });
+  const sk = E.expo(P(lt, 1.15, 1.6));
+  put($('e-sub'), W / 2, L.subY + (1 - sk) * 40, { o: sk });
+  const uk = slam(lt, 1.5, .3, 1.8);
+  put($('e-url'), W / 2, L.urlY, { s: uk.s, o: uk.o, blur: uk.blur });
+  if (lt > 1.5) addShake(t, S.end[0] + 1.5, 14);
+  const mk = E.out(P(lt, 1.9, 2.5));
+  put($('e-mk'), W / 2, L.mkY, { o: mk * .9 });
+}
+
+/* ---------- transitions: hazard-stripe wipe + flash ---------- */
+function transitions(t) {
+  const wipe = $('wipe');
+  let on = false;
+  for (const c of CUTS) {
+    const k = P(t, c - .28, c + .28);
+    if (k > 0 && k < 1) {
+      on = true;
+      const diag = Math.hypot(W, H);
+      wipe.style.display = 'block';
+      wipe.style.width = diag * 1.1 + 'px'; wipe.style.height = diag * 1.4 + 'px';
+      const x = lerp(-diag * 1.3, diag * 1.3, E.io(k));
+      wipe.style.transform = `translate(${W / 2 - diag * .55 + x}px,${H / 2 - diag * .7}px) rotate(-18deg)`;
+      wipe.style.transformOrigin = '50% 50%';
+    }
+    const fk = P(t, c, c + .12);
+    if (fk > 0 && fk < 1) $('flash').style.opacity = (1 - fk) * .35;
+  }
+  if (!on) wipe.style.display = 'none';
+}
+
+/* ---------- main render ---------- */
+const SCENES = [['s-hook', S.hook, sHook], ['s-plate', S.plate, sPlate], ['s-qr', S.qr, sQr], ['s-fit', S.fit, sFit], ['s-inq', S.inq, sInq], ['s-inv', S.inv, sInv], ['s-end', S.end, sEnd]];
+
+function renderAt(t) {
+  t = cl(t, 0, DURATION - 1e-6);
+  shake = 0;
+  $('flash').style.opacity = 0;
+  let idx = 0;
+  SCENES.forEach(([id, [a, b], fn], i) => {
+    const el = $(id), on = t >= a && t < b;
+    el.style.display = on ? 'block' : 'none';
+    if (on) { idx = i; fn(t); }
+  });
+  // camera: slow push + beat bump + shake applied to scene layer
+  const sc = SCENES[idx], lt = t - sc[1][0], d = sc[1][1] - sc[1][0];
+  const push = 1 + (lt / d) * .035;
+  const sx = noise(t, 38) * shake, sy = noise(t + 50, 41) * shake, sr = noise(t + 90, 23) * shake * .04;
+  $(sc[0]).style.transform = `translate(${sx}px,${sy}px) rotate(${sr}deg) scale(${push})`;
+  $(sc[0]).style.transformOrigin = '50% 50%';
+  // background drift (always moving)
+  $('grid').style.transform = `translate(${(-t * 60) % 120}px,${(-t * 25) % 120}px) rotate(-8deg)`;
+  $('bg').style.transform = `translate(${noise(t, .3) * 30 + sx * .3}px,${noise(t + 7, .3) * 30 + sy * .3}px) scale(1.05)`;
+  // HUD
+  const hudO = t < S.end[0] ? 1 : 1 - P(t, S.end[0], S.end[0] + .3);
+  put($('hud-logo'), V ? 60 : 64, V ? 80 : 56, { a: 'l', o: hudO * cl(P(t, .2, .6)) });
+  $('hud-idx').textContent = idx > 0 && idx < 6 ? `0${idx} / 05` : '';
+  put($('hud-idx'), W - (V ? 60 : 64), V ? 80 : 56, { a: 'r', o: hudO });
+  const tc = t.toFixed(2).padStart(5, '0');
+  $('hud-tc').textContent = `REC ${tc}`;
+  put($('hud-rec'), V ? 60 : 64, H - (V ? 80 : 56), { a: 'l', o: hudO * (Math.floor(t * 2) % 2 ? .6 : 1) * .8 });
+  $('hud-bar').style.width = W + 'px';
+  put($('hud-bar'), 0, H - 8, { a: 'tl', sx: t / DURATION, o: 1 });
+  $('hud-bar').style.transformOrigin = '0 0';
+  transitions(t);
+}
+window.renderAt = renderAt;
+
+/* ---------- preview player ---------- */
+if (!CAPTURE) {
+  let t0 = performance.now(), paused = false, pt = 0;
+  addEventListener('keydown', e => { if (e.code === 'Space') { paused = !paused; if (!paused) t0 = performance.now() - pt * 1000; } });
+  const loop = now => { if (!paused) { pt = ((now - t0) / 1000) % DURATION; renderAt(pt); } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+} else renderAt(0);
+})();
+</script>
+</body>
+</html>
